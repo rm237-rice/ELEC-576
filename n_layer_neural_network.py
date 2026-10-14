@@ -3,7 +3,7 @@ import numpy as np
 from sklearn import datasets, linear_model
 import matplotlib.pyplot as plt
 
-from three_layer_neural_network import NeuralNetwork, generate_data, plot_decision_boundary
+from three_layer_neural_network import NeuralNetwork, generate_data, plot_decision_boundary, softMax
 
 ########################################################################################################################
 ########################################################################################################################
@@ -11,32 +11,27 @@ from three_layer_neural_network import NeuralNetwork, generate_data, plot_decisi
 # FOLLOW THE INSTRUCTION BELOW TO BUILD AND TRAIN AN N-LAYER NEURAL NETWORK
 ########################################################################################################################
 ########################################################################################################################
-def softmax(x):
-    '''
-    softmax computes the softmax of the input x
-    :param x: input data
-    :return: softmax of the input x
-    '''
-    return np.exp(x) / np.sum(np.exp(x), axis=1, keepdims=True)
 
 class Layer(NeuralNetwork):
     """
     This class builds and trains a layer of neural network
     """
-    def __init__(self, nn_input_dim, nn_hidden_dim , nn_output_dim, nn_layer_idx, actFun_type='tanh', reg_lambda=0.01, seed=0):
+    def __init__(self, nn_input_dim , nn_output_dim, actFun_type='tanh', seed=0):
         '''
         :param nn_input_dim: input dimension
-        :param nn_hidden_dim: the number of hidden units
         :param nn_output_dim: output dimension
-        :param nn_layer_idx: index of the layer
         :param actFun_type: type of activation function. 3 options: 'tanh', 'sigmoid', 'relu'
-        :param reg_lambda: regularization coefficient
         :param seed: random seed
         '''
-        super().__init__(nn_input_dim, nn_hidden_dim , nn_output_dim, actFun_type, reg_lambda, seed)
-        self.nn_layer_idx = nn_layer_idx
-        self.W = np.random.randn(nn_input_dim, nn_hidden_dim) / np.sqrt(nn_input_dim)
-        self.b = np.zeros((1, nn_hidden_dim))
+        # initialize the weights and biases in the network
+        np.random.seed(seed)
+
+        self.nn_input_dim = nn_input_dim
+        self.nn_output_dim = nn_output_dim
+        self.actFun_type = actFun_type
+
+        self.W = np.random.randn(nn_input_dim, nn_output_dim) / np.sqrt(nn_input_dim)
+        self.b = np.zeros((1, nn_output_dim))
 
     def feedforward(self, X, actFun):
         '''
@@ -49,24 +44,27 @@ class Layer(NeuralNetwork):
         self.a = actFun(self.z)
         return None
 
-    def backprop(self, output_error, num_examples, prev_layer):
+    def backprop(self, output_error, num_examples, a_prev, z_prev, actFun_type_prev):
         '''
         backprop run backpropagation to compute the gradients used to update the parameters in the backward step
         :param output_error: error in the output layer
         :param num_examples: number of examples in the batch
-        :param prev_layer: previous layer object
+        :param a_prev: activation values from the previous layer
+        :param z_prev: pre-activation values from the previous layer
+        :param actFun_type_prev: activation function type of the previous layer
         :return: gradients dL/dW, dL/db
         '''
         # IMPLEMENT YOUR BACKPROP HERE
 
-        a1 = prev_layer.a
-        z1 = prev_layer.z
-
-        dW2 = a1.T @ output_error / num_examples
-        db2 = np.sum(output_error, axis=0, keepdims=True) / num_examples # dz_db = 1
-        input_error = output_error @ self.W.T * self.diff_actFun(z1, type=self.actFun_type)
-    
-        return dW2, db2, input_error
+        dW = a_prev.T @ output_error / num_examples
+        db = np.sum(output_error, axis=0, keepdims=True) / num_examples
+        
+        if z_prev is not None:
+            input_error = (output_error @ self.W.T) * self.diff_actFun(z_prev, actFun_type_prev)
+        else:
+            input_error = None  # Base case: input layer has no activation function derivative
+            
+        return dW, db, input_error
 
 class DeeperNeuralNetwork(NeuralNetwork):
     """
@@ -88,9 +86,11 @@ class DeeperNeuralNetwork(NeuralNetwork):
         self.layers = []
         for l in range(nn_layers):
             if l == 0:
-                self.layers.append(Layer(nn_input_dim, nn_hidden_dim, nn_output_dim, l, actFun_type, reg_lambda, seed))
+                self.layers.append(Layer(nn_input_dim, nn_hidden_dim, actFun_type, seed))
+            elif l == nn_layers-1:
+                self.layers.append(Layer(nn_hidden_dim, nn_output_dim, actFun_type, seed))
             else:
-                self.layers.append(Layer(nn_hidden_dim, nn_hidden_dim, nn_output_dim, l, actFun_type, reg_lambda, seed))
+                self.layers.append(Layer(nn_hidden_dim, nn_hidden_dim, actFun_type, seed))
         
     def feedforward(self, X, actFun):
         '''
@@ -103,9 +103,8 @@ class DeeperNeuralNetwork(NeuralNetwork):
         for l in range(self.nn_layers):
             if l == 0:
                 self.layers[l].feedforward(X, actFun)
-                # print(self.layers[0].a)
             elif l == self.nn_layers-1:
-                self.layers[l].feedforward(self.layers[l-1].a, softmax)
+                self.layers[l].feedforward(self.layers[l-1].a, softMax)
             else:
                 self.layers[l].feedforward(self.layers[l-1].a, actFun)
 
@@ -124,7 +123,6 @@ class DeeperNeuralNetwork(NeuralNetwork):
         self.feedforward(X, lambda x: self.actFun(x, type=self.actFun_type))
         # Calculating the loss
         # YOU IMPLEMENT YOUR CALCULATION OF THE LOSS HERE
-        # print(self.probs[range(num_examples), y])
         data_loss = np.sum(-np.log(self.probs[range(num_examples), y]))
 
         # Add l2 regularization term to loss (optional))
@@ -149,10 +147,20 @@ class DeeperNeuralNetwork(NeuralNetwork):
 
         output_error = self.probs - y_probs # softmax derivative for last layer
 
-        for l in np.arange(self.nn_layers-1, 0, -1):
-            dW, db, output_error = self.layers[l].backprop(output_error, num_examples, self.layers[l-1]) # input_error for this layer is the output_error for the next layer
-            dW_layers.insert(0, dW) # prepend to front of list since we are counting backwards
-            db_layers.insert(0, db) 
+        for l in range(self.nn_layers - 1, -1, -1):
+            if l > 0:
+                a_prev = self.layers[l-1].a
+                z_prev = self.layers[l-1].z
+                actFun_prev = self.layers[l-1].actFun_type
+            else:
+                a_prev = X
+                z_prev = None
+                actFun_prev = None
+
+            # dW, db, output_error = self.layers[l].backprop(output_error, num_examples, a_prev, z_prev)
+            dW, db, output_error = self.layers[l].backprop(output_error, num_examples, a_prev, z_prev, actFun_prev)
+            dW_layers.insert(0, dW)
+            db_layers.insert(0, db)
 
         return dW_layers, db_layers
 
@@ -172,14 +180,11 @@ class DeeperNeuralNetwork(NeuralNetwork):
             # Backpropagation
             dW_layers, db_layers = self.backprop(X, y)
 
-            # Add derivatives of regularization terms (b doesn't have regularization terms)
-            for l in range(1, self.nn_layers-1):
-                # print("dW shape: ", dW_layers[l].shape)
-                # print("W shape: ", self.layers[l].W.shape)
-                dW_layers[l] += self.reg_lambda * self.layers[l].W
             
-            # Gradient descent parameter update
-            for l in range(1, self.nn_layers-1):
+            for l in range(self.nn_layers):
+                # Add derivatives of regularization terms (b doesn't have regularization terms)
+                dW_layers[l] += self.reg_lambda * self.layers[l].W
+                # Gradient descent parameter update
                 self.layers[l].W += -epsilon * dW_layers[l]
                 self.layers[l].b += -epsilon * db_layers[l]
             
