@@ -12,7 +12,7 @@ from three_layer_neural_network import NeuralNetwork, generate_data, plot_decisi
 ########################################################################################################################
 ########################################################################################################################
 
-class Layer(NeuralNetwork):
+class Layer(object):
     """
     This class builds and trains a layer of neural network
     """
@@ -44,7 +44,7 @@ class Layer(NeuralNetwork):
         self.a = actFun(self.z)
         return None
 
-    def backprop(self, output_error, num_examples, a_prev, z_prev, actFun_type_prev):
+    def backprop(self, output_error, num_examples, a_prev, diff_actFun, z_prev, actFun_type_prev):
         '''
         backprop run backpropagation to compute the gradients used to update the parameters in the backward step
         :param output_error: error in the output layer
@@ -60,7 +60,7 @@ class Layer(NeuralNetwork):
         db = np.sum(output_error, axis=0, keepdims=True) / num_examples
         
         if z_prev is not None:
-            input_error = (output_error @ self.W.T) * self.diff_actFun(z_prev, actFun_type_prev)
+            input_error = (output_error @ self.W.T) * diff_actFun(z_prev, actFun_type_prev)
         else:
             input_error = None  # Base case: input layer has no activation function derivative
             
@@ -81,13 +81,13 @@ class DeeperNeuralNetwork(NeuralNetwork):
         :param seed: random seed
         '''        
         super().__init__(nn_input_dim, nn_hidden_dim , nn_output_dim, actFun_type, reg_lambda, seed)
-        self.nn_layers = nn_layers
+        self.nn_layers = nn_layers-1 # "3-layer nn" has 2 partially-hidden layers
 
         self.layers = []
-        for l in range(nn_layers):
+        for l in range(self.nn_layers):
             if l == 0:
                 self.layers.append(Layer(nn_input_dim, nn_hidden_dim, actFun_type, seed))
-            elif l == nn_layers-1:
+            elif l == self.nn_layers-1:
                 self.layers.append(Layer(nn_hidden_dim, nn_output_dim, actFun_type, seed))
             else:
                 self.layers.append(Layer(nn_hidden_dim, nn_hidden_dim, actFun_type, seed))
@@ -157,8 +157,7 @@ class DeeperNeuralNetwork(NeuralNetwork):
                 z_prev = None
                 actFun_prev = None
 
-            # dW, db, output_error = self.layers[l].backprop(output_error, num_examples, a_prev, z_prev)
-            dW, db, output_error = self.layers[l].backprop(output_error, num_examples, a_prev, z_prev, actFun_prev)
+            dW, db, output_error = self.layers[l].backprop(output_error, num_examples, a_prev, self.diff_actFun, z_prev, actFun_prev)
             dW_layers.insert(0, dW)
             db_layers.insert(0, db)
 
@@ -199,7 +198,7 @@ def main():
     plt.scatter(X[:, 0], X[:, 1], s=40, c=y, cmap=plt.cm.Spectral)
     plt.show()
 
-    model = DeeperNeuralNetwork(nn_input_dim=2, nn_hidden_dim=3 , nn_output_dim=2, nn_layers=3, actFun_type='tanh')
+    model = DeeperNeuralNetwork(nn_input_dim=2, nn_hidden_dim=3 , nn_output_dim=2, nn_layers=4, actFun_type='tanh')
     model.fit_model(X,y)
     model.visualize_decision_boundary(X,y)
 
