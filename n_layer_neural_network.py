@@ -14,7 +14,7 @@ from three_layer_neural_network import NeuralNetwork, generate_data, plot_decisi
 
 class Layer(object):
     """
-    This class builds and trains a layer of neural network
+    This class builds and trains a hidden layer of neural network
     """
     def __init__(self, nn_input_dim , nn_output_dim, actFun_type='tanh', seed=0):
         '''
@@ -46,7 +46,7 @@ class Layer(object):
 
     def backprop(self, output_error, num_examples, a_prev, diff_actFun, z_prev, actFun_type_prev):
         '''
-        backprop run backpropagation to compute the gradients used to update the parameters in the backward step
+        backprop runs backpropagation to compute the gradients used to update the parameters in the backward step
         :param output_error: error in the output layer
         :param num_examples: number of examples in the batch
         :param a_prev: activation values from the previous layer
@@ -62,7 +62,7 @@ class Layer(object):
         if z_prev is not None:
             input_error = (output_error @ self.W.T) * diff_actFun(z_prev, actFun_type_prev)
         else:
-            input_error = None  # Base case: input layer has no activation function derivative
+            input_error = None  # first layer has no activation function derivative
             
         return dW, db, input_error
 
@@ -195,10 +195,10 @@ class DeeperNeuralNetwork(NeuralNetwork):
 def main():
     # generate and visualize Make-Moons dataset
     X, y = generate_data()
-    plt.scatter(X[:, 0], X[:, 1], s=40, c=y, cmap=plt.cm.Spectral)
-    plt.show()
+    # plt.scatter(X[:, 0], X[:, 1], s=40, c=y, cmap=plt.cm.Spectral)
+    # plt.show()
 
-    model = DeeperNeuralNetwork(nn_input_dim=2, nn_hidden_dim=3 , nn_output_dim=2, nn_layers=4, actFun_type='tanh')
+    model = DeeperNeuralNetwork(nn_input_dim=2, nn_hidden_dim=3 , nn_output_dim=2, nn_layers=5, actFun_type='relu')
     model.fit_model(X,y)
     model.visualize_decision_boundary(X,y)
 
