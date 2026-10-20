@@ -3,7 +3,7 @@ import numpy as np
 from sklearn import datasets, linear_model
 import matplotlib.pyplot as plt
 
-from three_layer_neural_network import NeuralNetwork, generate_data, plot_decision_boundary, softMax
+from three_layer_neural_network import NeuralNetwork, generate_data, plot_decision_boundary, softmax, sigmoid
 
 ########################################################################################################################
 ########################################################################################################################
@@ -35,11 +35,14 @@ class Layer(object):
 
     def feedforward(self, X, actFun):
         '''
-        computes the output of the layer given input data X and activation function actFun
+        feedforward builds a multi-layer neural network and computes the two probabilities,
+        one for class 0 and one for class 1
         :param X: input data
         :param actFun: activation function
-        :return:
         '''
+        # print(X.shape)
+        # print(self.W.shape)
+        # print(self.b.shape)
         self.z = X @ self.W + self.b
         self.a = actFun(self.z)
         return None
@@ -81,7 +84,7 @@ class DeeperNeuralNetwork(NeuralNetwork):
         :param seed: random seed
         '''        
         super().__init__(nn_input_dim, nn_hidden_dim , nn_output_dim, actFun_type, reg_lambda, seed)
-        self.nn_layers = nn_layers-1 # "3-layer nn" has 2 partially-hidden layers
+        self.nn_layers = nn_layers-1 # "3-layer nn" requires 2 partially-hidden (Layer object) layers
 
         self.layers = []
         for l in range(self.nn_layers):
@@ -102,11 +105,11 @@ class DeeperNeuralNetwork(NeuralNetwork):
         '''
         for l in range(self.nn_layers):
             if l == 0:
-                self.layers[l].feedforward(X, actFun)
+                self.layers[l].feedforward(X, actFun) # activation function on first hidden layer
             elif l == self.nn_layers-1:
-                self.layers[l].feedforward(self.layers[l-1].a, softMax)
+                self.layers[l].feedforward(self.layers[l-1].a, sigmoid) # sigmoid on last layer
             else:
-                self.layers[l].feedforward(self.layers[l-1].a, actFun)
+                self.layers[l].feedforward(self.layers[l-1].a, actFun) # activation functions on hidden layers
 
         self.probs = self.layers[-1].a
 
@@ -145,14 +148,14 @@ class DeeperNeuralNetwork(NeuralNetwork):
         y_probs = np.zeros_like(self.probs)
         y_probs[range(num_examples), y] = 1
 
-        output_error = self.probs - y_probs # softmax derivative for last layer
+        output_error = self.probs - y_probs # softmax/sigmoid derivative for last layer
 
         for l in range(self.nn_layers - 1, -1, -1):
             if l > 0:
                 a_prev = self.layers[l-1].a
                 z_prev = self.layers[l-1].z
                 actFun_prev = self.layers[l-1].actFun_type
-            else:
+            else: # first layer's previous layer is just the input data
                 a_prev = X
                 z_prev = None
                 actFun_prev = None
@@ -179,7 +182,6 @@ class DeeperNeuralNetwork(NeuralNetwork):
             # Backpropagation
             dW_layers, db_layers = self.backprop(X, y)
 
-            
             for l in range(self.nn_layers):
                 # Add derivatives of regularization terms (b doesn't have regularization terms)
                 dW_layers[l] += self.reg_lambda * self.layers[l].W
@@ -189,16 +191,17 @@ class DeeperNeuralNetwork(NeuralNetwork):
             
             # Optionally print the loss.
             # This is expensive because it uses the whole dataset, so we don't want to do it too often.
-            if print_loss and i % 1000 == 0:
-                print("Loss after iteration %i: %f" % (i, self.calculate_loss(X, y)))
-
+            # if print_loss and i % 1000 == 0:
+            #     print("Loss after iteration %i: %f" % (i, self.calculate_loss(X, y)))
+        print("Loss after iteration %i: %f" % (num_passes, self.calculate_loss(X, y)))
+        
 def main():
     # generate and visualize Make-Moons dataset
     X, y = generate_data()
-    # plt.scatter(X[:, 0], X[:, 1], s=40, c=y, cmap=plt.cm.Spectral)
-    # plt.show()
+    plt.scatter(X[:, 0], X[:, 1], s=40, c=y, cmap=plt.cm.Spectral)
+    plt.show()
 
-    model = DeeperNeuralNetwork(nn_input_dim=2, nn_hidden_dim=3 , nn_output_dim=2, nn_layers=5, actFun_type='relu')
+    model = DeeperNeuralNetwork(nn_input_dim=2, nn_hidden_dim=3, nn_output_dim=2, nn_layers=7, actFun_type='tanh')
     model.fit_model(X,y)
     model.visualize_decision_boundary(X,y)
 
